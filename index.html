@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>
+        // Check if tab is actually hidden (e.g. headless browser runner / preview pane)
+        const isActuallyHidden = document.hidden;
+
+        // Force tab to always appear visible and in focus
+        Object.defineProperty(document, 'hidden', { get: () => false, configurable: true });
+        Object.defineProperty(document, 'visibilityState', { get: () => 'visible', configurable: true });
+
+        if (isActuallyHidden) {
+            window.requestAnimationFrame = function(callback) {
+                return setTimeout(() => {
+                    callback(performance.now());
+                }, 16);
+            };
+            window.cancelAnimationFrame = function(id) {
+                clearTimeout(id);
+            };
+        }
+
+        const originalAddEventListener = window.addEventListener;
+        window.addEventListener = function(type, listener, options) {
+            if (type === 'blur') {
+                return; // Prevent window blur handlers from pausing the game loop
+            }
+            return originalAddEventListener.apply(this, arguments);
+        };
+
+        const originalDocAddEventListener = document.addEventListener;
+        document.addEventListener = function(type, listener, options) {
+            if (type === 'visibilitychange') {
+                return; // Prevent document visibilitychange handlers from pausing the game loop
+            }
+            return originalDocAddEventListener.apply(this, arguments);
+        };
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏰 THE ADMINISTRATOR'S TOWER</title>
+    <!-- State-of-the-Art Futuristic & Monospace Cyber Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-obsidian: #030805;
+            --green-glow: #00ff66;
+            --cyber-cyan: #00e5ff;
+            --spectral-violet: #bd00ff;
+            --volcanic-red: #ff3c00;
+            --panel-border: rgba(0, 255, 102, 0.2);
+            --glass-bg: rgba(10, 22, 15, 0.45);
+            --crt-green: rgba(0, 255, 102, 0.15);
+            --font-display: 'Oxanium', sans-serif;
+            --font-mono: 'Share Tech Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-obsidian);
+            font-family: var(--font-display);
+            color: #ffffff;
+        }
+
+        #kaplay-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* CRT SCANLINE & VIGNETTE GLITCH EFFECTS */
+        .crt-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 4px, 6px 100%;
+            z-index: 999;
+            pointer-events: none;
+            opacity: 0.85;
+        }
+
+        .crt-vignette {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            box-shadow: inset 0 0 100px rgba(0, 255, 102, 0.25);
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        @keyframes pulseGlow {
+            0% { text-shadow: 0 0 5px var(--green-glow); }
+            50% { text-shadow: 0 0 20px var(--green-glow), 0 0 30px var(--cyber-cyan); }
+            100% { text-shadow: 0 0 5px var(--green-glow); }
+        }
+
+        /* GLASSMORPHIC DYNAMIC INTERFACE */
+        .hud-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            pointer-events: none; /* Let clicks pass to inputs/buttons inside */
+        }
+
+        .hud-overlay * {
+            pointer-events: auto; /* Re-enable clicks for items */
+        }
+
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), inset 0 0 10px rgba(0, 255, 102, 0.05);
+            padding: 15px;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .glass-panel:hover {
+            border-color: rgba(0, 255, 102, 0.4);
+            box-shadow: 0 8px 32px rgba(0, 255, 102, 0.15), inset 0 0 15px rgba(0, 255, 102, 0.1);
+        }
+
+        /* HEADER SECTION */
+        .hud-header {
+            width: 100%;
+            display: grid;
+            grid-template-columns: 1.5fr 2fr 1.5fr;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .header-title {
+            font-size: 16px;
+            font-weight: 900;
+            letter-spacing: 1.5px;
+            color: var(--green-glow);
+            animation: pulseGlow 4s infinite;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .header-stats {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            font-family: var(--font-mono);
+            font-size: 24px;
+            letter-spacing: 1px;
+        }
+
+        .stat-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .badge-val {
+            color: var(--cyber-cyan);
+            font-weight: bold;
+        }
+
+        .header-xp-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .xp-label-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            letter-spacing: 0.5px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .xp-bar-container {
+            width: 100%;
+            height: 12px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(0, 255, 102, 0.3);
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .xp-progress-bar {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--green-glow), var(--cyber-cyan));
+            box-shadow: 0 0 10px var(--green-glow);
+            border-radius: 6px;
+            transition: width 0.6s cubic-bezier(0.075, 0.82, 0.165, 1);
+        }
+
+        /* MAIN TERMINAL CONSOLE */
+        .main-workspace {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-grow: 1;
+            padding: 30px 0;
+            width: 100%;
+            max-height: calc(100% - 150px);
+            justify-content: flex-start;
+        }
+
+        /* ------------------------------------------
+           NEW MAIN MENU PANEL
+        ------------------------------------------ */
+        .main-menu-box {
+            width: 100%;
+            max-width: 520px;
+            text-align: left;
+            padding: 30px 40px;
+            animation: slideInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+        }
+
+        .menu-subtitle {
+            font-size: 11px;
+            letter-spacing: 2px;
+            color: var(--cyber-cyan);
+            margin-bottom: 30px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .menu-options {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .btn-menu-opt {
+            background: transparent;
+            border: none;
+            border-left: 3px solid rgba(0, 255, 102, 0.4);
+            border-radius: 0;
+            color: rgba(255, 255, 255, 0.85);
+            font-family: var(--font-display);
+            font-size: 22px;
+            font-weight: 700;
+            padding: 12px 20px;
+            cursor: pointer;
+            letter-spacing: 3px;
+            transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+            position: relative;
+            overflow: hidden;
+            text-align: left;
+            outline: none;
+            text-shadow: 0 0 15px rgba(0, 0, 0, 0.9);
+            width: 100%;
+        }
+
+        .btn-menu-opt::before {
+            content: '▶';
+            position: absolute;
+            left: -30px;
+            color: var(--green-glow);
+            transition: left 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+            font-weight: 900;
+            font-size: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .btn-menu-opt:hover:not(:disabled) {
+            background: transparent;
+            border-left-color: var(--green-glow);
+            padding-left: 40px;
+            color: #ffffff;
+            text-shadow: 0 0 20px rgba(0, 255, 102, 0.8), 0 0 40px rgba(0, 255, 102, 0.4);
+        }
+
+        .btn-menu-opt:hover:not(:disabled)::before {
+            left: 10px;
+        }
+
+        .btn-menu-opt:active:not(:disabled) {
+            transform: scale(0.97);
+        }
+
+        .btn-menu-opt:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+            border-left-color: rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* LOGIN INTERACTIVE PANEL */
+        .gate-login-box {
+            width: 100%;
+            max-width: 480px;
+            text-align: center;
+            animation: slideInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .glow-title {
+            font-size: 20px;
+            font-weight: 900;
+            letter-spacing: 2px;
+            color: var(--green-glow);
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px rgba(0, 255, 102, 0.3);
+        }
+
+        .gate-boot-sequence {
+            height: 140px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(0, 255, 102, 0.2);
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 16px;
+            color: #a8ffa8;
+            padding: 10px;
+            text-align: left;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+
+        .login-row {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        label {
+            font-size: 12px;
+            letter-spacing: 1px;
+            color: rgba(255, 255, 255, 0.8);
+            text-align: left;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        input[type="text"] {
+            flex-grow: 1;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid var(--panel-border);
+            border-radius: 4px;
+            padding: 12px;
+            font-family: var(--font-mono);
+            font-size: 18px;
+            color: #ffffff;
+            outline: none;
+            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.9);
+            transition: all 0.3s;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--green-glow);
+            box-shadow: 0 0 10px rgba(0, 255, 102, 0.2), inset 0 0 5px rgba(0, 0, 0, 0.9);
+        }
+
+        .btn-primary {
+            background: rgba(0, 255, 102, 0.1);
+            border: 1px solid var(--green-glow);
+            border-radius: 4px;
+            color: var(--green-glow);
+            font-family: var(--font-display);
+            font-weight: 700;
+            padding: 12px 24px;
+            font-size: 14px;
+            cursor: pointer;
+            letter-spacing: 1px;
+            transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+            text-shadow: 0 0 5px rgba(0, 255, 102, 0.4);
+            box-shadow: 0 0 5px rgba(0, 255, 102, 0.05);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: var(--green-glow);
+            color: var(--bg-obsidian);
+            box-shadow: 0 0 15px var(--green-glow);
+            text-shadow: none;
+        }
+
+        .btn-primary:active:not(:disabled) {
+            transform: scale(0.95);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            border-color: rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.5);
+            text-shadow: none;
+        }
+
+        /* CONSOLE CHILLING TRIAL CONSOLE */
+        .trial-container {
+            width: 100%;
+            max-width: 680px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            animation: slideInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .dialog-board {
+            display: grid;
+            grid-template-columns: 125px 1fr;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .admin-avatar {
+            width: 120px;
+            height: 120px;
+            border: 1px solid var(--panel-border);
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 64px;
+            box-shadow: 0 0 10px rgba(0, 255, 102, 0.1);
+            animation: pulseAvatar 3s infinite ease-in-out;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .admin-avatar::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(0, 255, 102, 0.15) 0%, transparent 80%);
+        }
+
+        @keyframes pulseAvatar {
+            0% { transform: scale(1); border-color: var(--panel-border); }
+            50% { transform: scale(1.05); border-color: var(--green-glow); box-shadow: 0 0 15px rgba(0, 255, 102, 0.3); }
+            100% { transform: scale(1); border-color: var(--panel-border); }
+        }
+
+        .admin-dialog-bubble {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px dashed var(--panel-border);
+            border-radius: 4px;
+            padding: 10px 15px;
+            font-family: var(--font-mono);
+            font-size: 18px;
+            line-height: 1.4;
+            color: #c0ffc0;
+            min-height: 70px;
+        }
+
+        .challenge-card {
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 4px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid rgba(0, 229, 255, 0.25);
+            box-shadow: 0 0 15px rgba(0, 229, 255, 0.05);
+        }
+
+        .challenge-title {
+            font-size: 11px;
+            letter-spacing: 2px;
+            color: var(--cyber-cyan);
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .challenge-text {
+            font-family: var(--font-mono);
+            font-size: 26px;
+            line-height: 1.3;
+            color: #ffffff;
+            text-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+        }
+
+        .interaction-row {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .console-actions-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.6);
+            border-radius: 4px;
+            font-family: var(--font-display);
+            font-size: 11px;
+            padding: 6px 12px;
+            cursor: pointer;
+            letter-spacing: 0.5px;
+            transition: all 0.3s;
+        }
+
+        .btn-secondary:hover {
+            border-color: #ffffff;
+            color: #ffffff;
+        }
+
+        /* CLASS PROMOTION CEREMONY PANEL (Overlay modal) */
+        .promotion-curtain {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(3, 8, 5, 0.95);
+            z-index: 500;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            transition: opacity 0.5s;
+        }
+
+        .promotion-modal {
+            max-width: 580px;
+            text-align: center;
+            border-color: var(--spectral-violet);
+            box-shadow: 0 0 30px rgba(189, 0, 255, 0.2);
+            animation: zoomInReveal 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .promotion-modal h2 {
+            font-size: 24px;
+            color: var(--spectral-violet);
+            letter-spacing: 3px;
+            text-shadow: 0 0 10px rgba(189, 0, 255, 0.4);
+            margin-bottom: 20px;
+        }
+
+        .class-badge-big {
+            font-size: 32px;
+            font-weight: 900;
+            color: var(--cyber-cyan);
+            background: rgba(0, 229, 255, 0.1);
+            border: 2px solid var(--cyber-cyan);
+            border-radius: 4px;
+            padding: 15px 30px;
+            display: inline-block;
+            margin-bottom: 25px;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+            box-shadow: 0 0 20px rgba(0, 229, 255, 0.2);
+            animation: pulseClassBadge 2s infinite;
+        }
+
+        @keyframes pulseClassBadge {
+            0% { transform: scale(1); box-shadow: 0 0 20px rgba(0, 229, 255, 0.2); }
+            50% { transform: scale(1.03); box-shadow: 0 0 35px rgba(0, 229, 255, 0.4); }
+            100% { transform: scale(1); box-shadow: 0 0 20px rgba(0, 229, 255, 0.2); }
+        }
+
+        .promotion-speech {
+            font-family: var(--font-mono);
+            font-size: 20px;
+            line-height: 1.4;
+            color: #e0d0ff;
+            margin-bottom: 30px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px dashed var(--spectral-violet);
+        }
+
+        /* LEADERBOARD VIEWPORT PANEL */
+        .leaderboard-modal {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100%;
+            max-width: 520px;
+            z-index: 600;
+            animation: zoomInReveal 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .leaderboard-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px solid var(--panel-border);
+            padding-bottom: 8px;
+        }
+
+        .leaderboard-header-row h3 {
+            color: var(--green-glow);
+            font-size: 18px;
+            letter-spacing: 1px;
+        }
+
+        .leaderboard-grid {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: var(--font-mono);
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+
+        .leaderboard-grid th, .leaderboard-grid td {
+            text-align: left;
+            padding: 8px 10px;
+            border-bottom: 1px solid rgba(0, 255, 102, 0.08);
+        }
+
+        .leaderboard-grid th {
+            color: var(--cyber-cyan);
+            font-size: 16px;
+            letter-spacing: 0.5px;
+        }
+
+        .leaderboard-grid tr:hover td {
+            background: rgba(0, 255, 102, 0.05);
+            color: var(--green-glow);
+        }
+
+        /* FOOTER BRAND */
+        .hud-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            letter-spacing: 1px;
+            color: rgba(255, 255, 255, 0.5);
+            width: 100%;
+        }
+
+        .footer-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .btn-text {
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+
+        .btn-text:hover {
+            color: var(--green-glow);
+            text-shadow: 0 0 5px rgba(0, 255, 102, 0.4);
+        }
+
+        /* ANIMATIONS LIST */
+        @keyframes slideInUp {
+            from { transform: translateY(40px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        @keyframes zoomInReveal {
+            from { transform: scale(0.9) translate(-50%, -50%); opacity: 0; }
+            to { transform: scale(1) translate(-50%, -50%); opacity: 1; }
+        }
+        
+        /* Modal centering override for zoomInReveal */
+        .promotion-modal {
+            animation: zoomInSimple 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes zoomInSimple {
+            from { transform: scale(0.9); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes breatheBg {
+            0% { transform: scale(1); filter: brightness(1); }
+            100% { transform: scale(1.05); filter: brightness(1.15); }
+        }
+
+        /* Shake animation for errors */
+        .shake {
+            animation: shakeWidget 0.4s;
+        }
+
+        @keyframes shakeWidget {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-8px); }
+            40%, 80% { transform: translateX(8px); }
+        }
+
+        /* MULTIPLAYER CONNECTING MODAL */
+        .mp-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 980;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(6px);
+            animation: fadeInOverlay 0.3s ease;
+        }
+
+        @keyframes fadeInOverlay {
+            from { opacity: 0; } to { opacity: 1; }
+        }
+
+        .mp-dialog {
+            background: rgba(3, 12, 8, 0.95);
+            border: 1px solid rgba(0, 229, 255, 0.4);
+            border-radius: 10px;
+            padding: 40px 50px;
+            text-align: center;
+            max-width: 420px;
+            width: 90%;
+            box-shadow: 0 0 60px rgba(0, 229, 255, 0.2);
+            animation: slideInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Spinner Ring */
+        .mp-spinner {
+            width: 70px;
+            height: 70px;
+            border: 4px solid rgba(0, 229, 255, 0.1);
+            border-top: 4px solid var(--cyber-cyan);
+            border-right: 4px solid var(--green-glow);
+            border-radius: 50%;
+            animation: spinRing 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spinRing {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .mp-wifi-icon {
+            font-size: 36px;
+            margin-bottom: 18px;
+            animation: wifiPulse 1.5s infinite;
+        }
+
+        @keyframes wifiPulse {
+            0%, 100% { opacity: 1; filter: drop-shadow(0 0 8px var(--cyber-cyan)); }
+            50% { opacity: 0.4; filter: none; }
+        }
+
+        .mp-connecting-text {
+            font-family: var(--font-mono);
+            font-size: 14px;
+            color: var(--cyber-cyan);
+            letter-spacing: 2px;
+            margin-bottom: 30px;
+        }
+
+        .mp-title {
+            font-family: var(--font-display);
+            font-size: 22px;
+            font-weight: 900;
+            color: #ffffff;
+            letter-spacing: 3px;
+            margin-bottom: 10px;
+        }
+
+        .mp-subtitle {
+            font-size: 13px;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 28px;
+            font-family: var(--font-mono);
+        }
+
+        .mp-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body style="overflow:hidden">
+    <!-- Full-screen dynamic tower background during main menu/login lobby -->
+    <div id="menu-background" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1);">
+        <!-- Dark tint overlay so text is readable over the video -->
+        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(rgba(3, 8, 5, 0.55), rgba(3, 8, 5, 0.85)); z-index: 1;"></div>
+        
+        <!-- Video element (replace the src with your own video file in the public/sprites folder) -->
+        <video id="menu-video" autoplay loop muted playsinline poster="/sprites/cyberpunk_tower.png" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; animation: breatheBg 20s infinite alternate ease-in-out;">
+            <source src="/sprites/can_you_make_the_flyingvehicle.mp4" type="video/mp4">
+        </video>
+    </div>
+
+    <!-- Visual background game stream (KAPLAY Canvas) -->
+    <canvas id="kaplay-canvas"></canvas>
+
+    <!-- Curved CRT scanline effects -->
+    <div class="crt-overlay"></div>
+    <div class="crt-vignette"></div>
+
+    <!-- HUD Overlay Dashboard -->
+    <div class="hud-overlay">
+        <!-- TOP ARCADE HUD HEADER -->
+        <header class="hud-header glass-panel" id="main-header" style="opacity: 0; pointer-events: none;">
+            <div class="header-left">
+                <div class="header-title">🏰 THE TOWER ENGINE</div>
+            </div>
+            
+            <div class="header-center">
+                <div class="header-stats">
+                    <div class="stat-badge">
+                        <span>FLOOR:</span>
+                        <span class="badge-val" id="stat-floor">1</span>
+                    </div>
+                    <div class="stat-badge">
+                        <span>LEVEL:</span>
+                        <span class="badge-val" id="stat-level">1</span>
+                    </div>
+                    <div class="stat-badge" style="font-size: 18px; margin-left: 10px;">
+                        <span>CLASS:</span>
+                        <span class="badge-val" id="stat-class" style="color: var(--spectral-violet); font-size: 16px;">Unregistered Aspirant</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="header-right">
+                <div class="header-xp-panel">
+                    <div class="xp-label-row">
+                        <span>CODENAME: <b id="stat-codename" style="color: var(--green-glow);">ALPHA</b></span>
+                        <span id="stat-xp">0 / 100 XP</span>
+                    </div>
+                    <div class="xp-bar-container">
+                        <div class="xp-progress-bar" id="xp-bar"></div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- CENTER INTERACTIVE WORKSPACE -->
+        <main class="main-workspace">
+            
+            <!-- PANEL 0: NEW MAIN MENU PANEL -->
+            <div class="main-menu-box" id="menu-panel">
+                <div class="glow-title" style="font-size: 38px; letter-spacing: 6px; margin-bottom: 6px; animation: pulseGlow 3s infinite;">TOWER OF ANOMALIES</div>
+                <div class="menu-subtitle" style="margin-bottom: 40px;"> ▸ </div>
+
+                <div class="menu-options">
+                    <button class="btn-menu-opt" id="btn-menu-new">⚡ NEW GAME</button>
+                    <button class="btn-menu-opt" id="btn-menu-continue" disabled>📂 RESUME</button>
+                    <button class="btn-menu-opt" id="btn-menu-leaderboard">💾 LEADERBOARD</button>
+                    <button class="btn-menu-opt" id="btn-menu-diagnostics">⚙️ SETTINGS</button>
+                    <button class="btn-menu-opt" id="btn-menu-exit" style="border-left-color: rgba(255, 60, 0, 0.7); color: rgba(255, 180, 160, 0.85);">✕ EXIT</button>
+                </div>
+            </div>
+            
+            <!-- PANEL 1: USER REGISTRATION / GATEWAY BYPASS (Hidden initially) -->
+            <div class="glass-panel gate-login-box" id="login-panel" style="display: none;">
+                <div class="glow-title">> SECURE GATEWAY ENCRYPTION BYPASS</div>
+                <div class="gate-boot-sequence" id="boot-log">
+                    <div>> APERTURE NODE QUANTUM CHANNELS READY.</div>
+                </div>
+                <div class="login-form">
+                    <div class="login-row">
+                        <label for="agent-input">> STATE ELITE AGENT CODENAME CLEARANCE:</label>
+                        <div class="input-row">
+                            <input type="text" id="agent-input" placeholder="e.g. VECTOR_COV" autocomplete="off" maxlength="14" />
+                            <button id="login-btn" class="btn-primary">BYPASS</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANEL 2: ACTIVE TRIAL CONSOLE (Hidden initially) -->
+            <div class="glass-panel trial-container" id="trial-panel" style="display: none;">
+                <!-- Administrator avatar and dialogues -->
+                <div class="dialog-board">
+                    <div class="admin-avatar" id="admin-face" style="background-image: url('/sprites/admin_neutral.png'); background-size: cover; background-position: center; color: transparent;">🕶️</div>
+                    <div class="admin-dialog-bubble" id="admin-bubble">
+                        Establishing communication link...
+                    </div>
+                </div>
+
+                <!-- Active floor challenge content -->
+                <div class="challenge-card" id="challenge-card-widget">
+                    <div class="challenge-title" id="challenge-floor-title">FLOOR 01 // MIND PROTOCOL</div>
+                    <div class="challenge-text" id="challenge-content">
+                        Loading challenge matrix registers...
+                    </div>
+                </div>
+
+                <!-- Response input console -->
+                <div class="interaction-row">
+                    <div class="input-row">
+                        <input type="text" id="answer-input" placeholder="DECODE ANSWER Plaintext Here..." autocomplete="off"/>
+                        <button id="submit-btn" class="btn-primary">DECRYPT</button>
+                    </div>
+                    <div class="console-actions-row">
+                        <button class="btn-secondary" id="btn-hint">📡 SCAN HINT</button>
+                        <button class="btn-secondary" id="btn-reset" style="border-color: rgba(255, 60, 0, 0.4); color: rgba(255, 60, 0, 0.7);">🔥 PURGE CORE</button>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- BOTTOM HUD FOOTER BRAND -->
+        <footer class="hud-footer">
+            <div class="footer-left">
+                <span>CORE VERSION: v3.5 // DYNAMIC DUAL COGNITION SECURED</span>
+                <span class="btn-text" id="btn-show-scores">💾 HIGH SCORES</span>
+            </div>
+            <div>
+                <span>STATUS: <span style="color: var(--green-glow); font-weight: bold;">CONNECTED</span></span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- CLASS PROMOTION CEREMONY OVERLAY -->
+    <div class="promotion-curtain" id="promotion-screen" style="display: none; opacity: 0;">
+        <div class="glass-panel promotion-modal">
+            <h2>🏆 NEURAL TRANSFORMATION PROTOCOL</h2>
+            <p style="font-size: 13px; color: rgba(255, 255, 255, 0.6); margin-bottom: 20px; letter-spacing: 1px;">
+                THE ADMINISTRATOR RE-MAPPED YOUR MENTAL CHANNELS
+            </p>
+            <div class="class-badge-big" id="ceremony-class-title">AETHER HACKER</div>
+            <div class="promotion-speech" id="ceremony-class-speech">
+                "You have breached my encryption matrix with elegant wit. A mere Sentinel would have brute-forced the registers. I promote you to Aether Hacker."
+            </div>
+            <button class="btn-primary" id="btn-ceremony-ack" style="padding: 15px 40px; font-size: 16px;">ASCEND FURTHER</button>
+        </div>
+    </div>
+
+    <!-- LEADERBOARD DATA MODAL -->
+    <div class="glass-panel leaderboard-modal" id="scores-modal" style="display: none;">
+        <div class="leaderboard-header-row">
+            <h3>💾 PERSISTENT LEADERBOARD DOSSIER</h3>
+            <button class="btn-secondary" id="btn-close-scores" style="padding: 3px 8px;">CLOSE</button>
+        </div>
+        <table class="leaderboard-grid">
+            <thead>
+                <tr>
+                    <th>RANK</th>
+                    <th>AGENT</th>
+                    <th>FLOOR</th>
+                    <th>LEVEL</th>
+                    <th>CLASS</th>
+                </tr>
+            </thead>
+            <tbody id="leaderboard-body">
+                <!-- Scores injected dynamically -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- SYSTEM DIAGNOSTICS MODAL -->
+    <div class="glass-panel leaderboard-modal" id="diagnostics-modal" style="display: none;">
+        <div class="leaderboard-header-row">
+            <h3>⚙️ TOWER ENGINE CORE DIAGNOSTICS</h3>
+            <button class="btn-secondary" id="btn-close-diagnostics" style="padding: 3px 8px;">CLOSE</button>
+        </div>
+        <div style="font-family: var(--font-mono); font-size: 18px; line-height: 1.6; padding: 10px 0;">
+            <div>> APEX COGNITIVE MODEL: <span style="color: var(--cyber-cyan); font-weight: bold;">GEMINI 3.5 FLASH</span></div>
+            <div>> UPLINK THREAD RATE: <span style="color: var(--green-glow); font-weight: bold;">DIRECT CLIENT CHANNEL</span></div>
+            <div>> CONNECTION LATENCY: <span style="color: var(--green-glow); font-weight: bold;">14ms (QUANTUM NODAL)</span></div>
+            <div>> HARDWARE SYNTH AUD: <span style="color: var(--green-glow); font-weight: bold;">ONLINE (WEB AUDIO)</span></div>
+            <div>> TOWER GRAVITY ENGINE: <span style="color: var(--green-glow); font-weight: bold;">OPERATIONAL (KAPLAY)</span></div>
+            <div>> FIREWALL PENETRATION: <span style="color: var(--volcanic-red); font-weight: bold;">DECRYPTOR CHARGED</span></div>
+            <hr style="border: none; border-top: 1px dashed var(--panel-border); margin: 12px 0;" />
+            <div style="font-size: 14px; color: rgba(255, 255, 255, 0.6); text-align: center;">
+                *CLEARANCE PROTOCOLS CONFIRMED ENCRYPTION LEVEL 10*
+            </div>
+        </div>
+    </div>
+
+    <!-- MULTIPLAYER CONNECTION MODAL -->
+    <div id="mp-modal" style="display:none;" class="mp-overlay">
+        <div class="mp-dialog">
+            <div id="mp-spinner-section">
+                <div class="mp-wifi-icon">📶</div>
+                <div class="mp-spinner"></div>
+                <div class="mp-connecting-text" id="mp-connecting-label">CONNECTING ...</div>
+            </div>
+            <div id="mp-enter-section" style="display:none;">
+                <div class="mp-title">MULTIPLAYER MODE</div>
+                <div class="mp-subtitle">&gt; Signal locked. Enter the arena with other players.</div>
+                <div class="mp-actions">
+                    <button class="btn-primary" id="mp-confirm-btn" style="font-size:14px; padding: 12px 28px; border-color: var(--cyber-cyan); color: var(--cyber-cyan);">⚡ ENTER</button>
+                    <button class="btn-secondary" id="mp-cancel-btn" style="font-size:14px; padding: 12px 28px;">✕ BACK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CORE SHUTDOWN SYSTEM OVERLAY -->
+    <div class="promotion-curtain" id="shutdown-screen" style="display: none; opacity: 0; background: #000000; z-index: 2000;">
+        <div class="glass-panel" style="max-width: 480px; text-align: left; border-color: var(--volcanic-red); box-shadow: 0 0 35px rgba(255, 60, 0, 0.25); font-family: var(--font-mono); font-size: 20px; line-height: 1.6; padding: 25px;">
+            <div style="color: var(--volcanic-red); font-weight: 900; margin-bottom: 20px; font-family: var(--font-display); letter-spacing: 2px; text-shadow: 0 0 10px rgba(255, 60, 0, 0.3);">⚠️ NEURAL LINK SEVERED</div>
+            <div id="shutdown-log" style="color: #ff9999;">> SHUTTING DOWN TOWER CORE...</div>
+        </div>
+    </div>
+
+    <!-- Main Game Script loader -->
+    <script src="src/main.js" type="module"></script>
+</body>
+</html>
