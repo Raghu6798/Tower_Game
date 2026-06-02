@@ -16,6 +16,9 @@ const kaplayCongrats = () => {
 export default defineConfig({
     // index.html out file will start with a relative path for script
     base: "./",
+    define: {
+        "process.env.GEMINI_API_KEY": JSON.stringify(process.env.GEMINI_API_KEY || ""),
+    },
     server: {
         port: 3001,
         proxy: {

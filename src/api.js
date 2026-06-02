@@ -1,6 +1,7 @@
 // Dynamic AI Uplink gateway calling gemini-3.5-flash
 const getApiKey = () => {
-    return import.meta.env.VITE_GEMINI_API_KEY;
+    return import.meta.env.VITE_GEMINI_API_KEY || 
+           (typeof process !== "undefined" && process.env ? process.env.GEMINI_API_KEY : "");
 };
 
 // Memory Management
@@ -133,6 +134,7 @@ function generateProceduralChallenge(floor) {
 export async function generateChallenge(floor, className) {
     const zone = getZoneInfo(floor);
     const memory = await fetchMemory();
+    const apiKey = getApiKey();
     
     let memoryContext = "";
     if (memory && memory.length > 0) {
@@ -163,22 +165,33 @@ You MUST return a JSON object with this exact schema:
 Ensure the puzzle has a single, definitive, short English word or number code solution (UPPER CASE).
 Return ONLY the raw JSON block without markdown formatting or code blocks.`;
 
+    if (!apiKey) {
+        console.warn(`>> [API] No Gemini API key found. Using fallback procedural challenge.`);
+        return generateProceduralChallenge(floor);
+    }
+
     try {
-        console.log(`>> [API] Requesting Floor ${floor} challenge from local Llama.cpp...`);
-        const response = await fetch(`http://localhost:8080/v1/chat/completions`, {
+        console.log(`>> [API] Requesting Floor ${floor} challenge from Gemini API...`);
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                model: "google-gemma-4-E2B-it.gguf",
-                messages: [{ role: "user", content: prompt }]
+                contents: [{
+                    parts: [{
+                        text: prompt
+                    }]
+                }],
+                generationConfig: {
+                    responseMimeType: "application/json"
+                }
             })
         });
 
         const data = await response.json();
         if (data.error) throw new Error(data.error.message);
 
-        if (data.choices && data.choices.length > 0) {
-            const rawText = data.choices[0].message.content;
+        if (data.candidates && data.candidates.length > 0) {
+            const rawText = data.candidates[0].content.parts[0].text;
             const cleanText = rawText.replace(/```json|```/g, "").trim();
             const parsed = JSON.parse(cleanText);
             
@@ -196,6 +209,7 @@ Return ONLY the raw JSON block without markdown formatting or code blocks.`;
 export async function checkAnswer(floor, question, userAnswer) {
     const procedural = generateProceduralChallenge(floor);
     const memory = await fetchMemory();
+    const apiKey = getApiKey();
     
     let memoryContext = "";
     if (memory && memory.length > 0) {
@@ -221,20 +235,33 @@ Return a JSON object matching this exact schema:
 }
 Return ONLY the raw JSON block without markdown formatting or code blocks.`;
 
+    if (!apiKey) {
+        console.warn(`>> [API] No Gemini API key found. Using local exact match judge.`);
+        return runLocalExactMatch(floor, question, userAnswer, procedural.solution);
+    }
+
     try {
-        console.log(`>> [API] Checking answer semantically via local Llama.cpp...`);
-        const response = await fetch(`http://localhost:8080/v1/chat/completions`, {
+        console.log(`>> [API] Checking answer semantically via Gemini API...`);
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                model: "google-gemma-4-E2B-it.gguf",
-                messages: [{ role: "user", content: prompt }]
+                contents: [{
+                    parts: [{
+                        text: prompt
+                    }]
+                }],
+                generationConfig: {
+                    responseMimeType: "application/json"
+                }
             })
         });
 
         const data = await response.json();
-        if (data.choices && data.choices.length > 0) {
-            const rawText = data.choices[0].message.content;
+        if (data.error) throw new Error(data.error.message);
+
+        if (data.candidates && data.candidates.length > 0) {
+            const rawText = data.candidates[0].content.parts[0].text;
             const cleanText = rawText.replace(/```json|```/g, "").trim();
             const parsed = JSON.parse(cleanText);
             
@@ -246,24 +273,28 @@ Return ONLY the raw JSON block without markdown formatting or code blocks.`;
         throw new Error("Malformed judge response");
     } catch (e) {
         console.warn(`>> [API] Semantic judge fallback: "${e.message}". Running client exact match.`);
-        const cleanUser = userAnswer.trim().toUpperCase().replace(/^(A|THE|AN)\s+/, "");
-        const cleanSol = procedural.solution.trim().toUpperCase();
-        
-        const isCorrect = cleanUser === cleanSol || cleanUser.includes(cleanSol) || cleanSol.includes(cleanUser);
-        
-        const fallbackRemark = isCorrect 
-            ? "Hmph. Match detected in local system buffers. Don't let success blind you, Aspirant."
-            : "Match rejected. Your input sequence is mathematically deficient.";
-            
-        // Save to memory asynchronously
-        saveMemory(floor, question, userAnswer, fallbackRemark);
-        
-        return {
-            correct: isCorrect,
-            administrator_remarks: fallbackRemark,
-            solution: cleanSol
-        };
+        return runLocalExactMatch(floor, question, userAnswer, procedural.solution);
     }
+}
+
+function runLocalExactMatch(floor, question, userAnswer, targetSolution) {
+    const cleanUser = userAnswer.trim().toUpperCase().replace(/^(A|THE|AN)\s+/, "");
+    const cleanSol = targetSolution.trim().toUpperCase();
+    
+    const isCorrect = cleanUser === cleanSol || cleanUser.includes(cleanSol) || cleanSol.includes(cleanUser);
+    
+    const fallbackRemark = isCorrect 
+        ? "Hmph. Match detected in local system buffers. Don't let success blind you, Aspirant."
+        : "Match rejected. Your input sequence is mathematically deficient.";
+        
+    // Save to memory asynchronously
+    saveMemory(floor, question, userAnswer, fallbackRemark);
+    
+    return {
+        correct: isCorrect,
+        administrator_remarks: fallbackRemark,
+        solution: cleanSol
+    };
 }
 
 export async function determineSpecializedClass(history) {
@@ -285,31 +316,48 @@ Return a single JSON object with this schema:
 }
 Return ONLY the raw JSON block.`;
 
+    if (!apiKey) {
+        console.warn(`>> [API] No Gemini API key found. Using local promotion ceremony.`);
+        return runLocalPromotion();
+    }
+
     try {
-        console.log(`>> [API] Class Promotion Ceremony via local Llama.cpp...`);
-        const response = await fetch(`http://localhost:8080/v1/chat/completions`, {
+        console.log(`>> [API] Class Promotion Ceremony via Gemini API...`);
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                model: "google-gemma-4-E2B-it.gguf",
-                messages: [{ role: "user", content: prompt }]
+                contents: [{
+                    parts: [{
+                        text: prompt
+                    }]
+                }],
+                generationConfig: {
+                    responseMimeType: "application/json"
+                }
             })
         });
 
         const data = await response.json();
-        if (data.choices && data.choices.length > 0) {
-            const rawText = data.choices[0].message.content;
+        if (data.error) throw new Error(data.error.message);
+
+        if (data.candidates && data.candidates.length > 0) {
+            const rawText = data.candidates[0].content.parts[0].text;
             const cleanText = rawText.replace(/```json|```/g, "").trim();
             return JSON.parse(cleanText);
         }
         throw new Error("Invalid promotion ceremony");
     } catch (e) {
         console.warn(`>> [API] Class Ceremony fallback: "${e.message}".`);
-        const options = ["Quantum Cryptographer", "Aether Hacker", "Logic Sentinel", "Void Infiltrator"];
-        const chosen = options[Math.floor(Math.random() * options.length)];
-        return {
-            className: chosen,
-            ceremony_speech: `>> [LOCAL BIOS CHIP] Synchronizing neural pathways... Assigned node class: [${chosen}].`
-        };
+        return runLocalPromotion();
     }
+}
+
+function runLocalPromotion() {
+    const options = ["Quantum Cryptographer", "Aether Hacker", "Logic Sentinel", "Void Infiltrator"];
+    const chosen = options[Math.floor(Math.random() * options.length)];
+    return {
+        className: chosen,
+        ceremony_speech: `>> [LOCAL BIOS CHIP] Synchronizing neural pathways... Assigned node class: [${chosen}].`
+    };
 }
