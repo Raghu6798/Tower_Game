@@ -8,23 +8,53 @@ const getApiKey = () => {
 export async function fetchMemory() {
     try {
         const response = await fetch('/api/memory');
+        if (!response.ok) {
+            throw new Error(`HTTP status ${response.status}`);
+        }
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+            throw new Error("Response is not JSON");
+        }
         const data = await response.json();
         return data;
     } catch (e) {
-        console.warn(">> [API] Memory offline:", e.message);
-        return [];
+        console.warn(">> [API] Memory server offline, loading from localStorage:", e.message);
+        try {
+            const localData = localStorage.getItem("admin_memory_history");
+            return localData ? JSON.parse(localData) : [];
+        } catch (localErr) {
+            console.error(">> [API] LocalStorage read failed:", localErr.message);
+            return [];
+        }
     }
 }
 
 export async function saveMemory(floor, challenge, player_answer, admin_remark) {
     try {
-        await fetch('/api/memory', {
+        const response = await fetch('/api/memory', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ floor, challenge, player_answer, admin_remark })
         });
+        if (!response.ok) {
+            throw new Error(`HTTP status ${response.status}`);
+        }
     } catch (e) {
-        console.warn(">> [API] Memory save failed:", e.message);
+        console.warn(">> [API] Memory server save failed, saving to localStorage:", e.message);
+    }
+
+    // Always save to localStorage as well, so local client state is persistent and works seamlessly on static hosts like Vercel
+    try {
+        const localData = localStorage.getItem("admin_memory_history");
+        const history = localData ? JSON.parse(localData) : [];
+        history.push({ floor, challenge, player_answer, admin_remark });
+        // Keep only last 5 to match server limit
+        if (history.length > 5) {
+            history.shift();
+        }
+        localStorage.setItem("admin_memory_history", JSON.stringify(history));
+    } catch (localErr) {
+        console.error(">> [API] LocalStorage write failed:", localErr.message);
     }
 }
 

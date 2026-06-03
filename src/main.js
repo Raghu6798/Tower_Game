@@ -16,7 +16,6 @@ class TowerAudioSynth {
         if (this.ctx) return;
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         this.ctx = new AudioContextClass();
-        this.startAmbientDrone();
     }
 
     playClick() {
@@ -115,7 +114,7 @@ class TowerAudioSynth {
             gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
 
             if (panner) {
-                panner.pan.setValueAtValue((idx / chords.length) * 2 - 1, now);
+                panner.pan.setValueAtTime((idx / chords.length) * 2 - 1, now);
                 osc.connect(panner);
                 panner.connect(gain);
             } else {
@@ -129,6 +128,10 @@ class TowerAudioSynth {
     }
 
     startAmbientDrone() {
+        this.init();
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+        if (this.droneOsc) return;
+
         try {
             const now = this.ctx.currentTime;
             this.droneOsc = this.ctx.createOscillator();
@@ -155,8 +158,17 @@ class TowerAudioSynth {
         }
     }
 
+    stopAmbientDrone() {
+        if (this.droneOsc) {
+            try {
+                this.droneOsc.stop();
+            } catch (e) {}
+            this.droneOsc = null;
+        }
+    }
+
     droneVolumeLoop() {
-        if (!this.droneGain || !this.ctx) return;
+        if (!this.droneGain || !this.droneOsc || !this.ctx) return;
         const now = this.ctx.currentTime;
         this.droneGain.gain.linearRampToValueAtTime(0.022, now + 3);
         this.droneGain.gain.linearRampToValueAtTime(0.012, now + 6);
@@ -176,6 +188,54 @@ const k = kaplay({
     letterbox: false,
     background: [10, 10, 12]
 });
+
+k.loadSound("main_menu_song", "examples/sounds/main_menu_song.mpeg");
+
+let menuMusic = null;
+let musicStarted = false;
+let musicAllowed = true;
+
+function addMenuMusicListeners() {
+    document.addEventListener("click", startMenuMusic);
+    document.addEventListener("keydown", startMenuMusic);
+}
+
+function removeMenuMusicListeners() {
+    document.removeEventListener("click", startMenuMusic);
+    document.removeEventListener("keydown", startMenuMusic);
+}
+
+function startMenuMusic() {
+    if (!musicAllowed) return;
+    if (musicStarted) return;
+    const menuBg = document.getElementById("menu-background");
+    if (menuBg && menuBg.style.display !== "none") {
+        try {
+            synth.init();
+            menuMusic = k.play("main_menu_song", {
+                loop: true,
+                volume: 0.3
+            });
+            musicStarted = true;
+        } catch (e) {
+            console.warn("Failed to play menu music:", e);
+        }
+    }
+}
+
+function stopMenuMusic() {
+    musicAllowed = false;
+    removeMenuMusicListeners();
+    if (menuMusic) {
+        try {
+            menuMusic.stop();
+        } catch (e) {
+            console.warn("Failed to stop menu music:", e);
+        }
+        menuMusic = null;
+        musicStarted = false;
+    }
+}
 
 
 
@@ -631,7 +691,7 @@ function setupRewardShopDOM() {
     modal.id = "reward-shop-modal";
     modal.className = "glass-panel leaderboard-modal";
     modal.style.display = "none";
-    modal.style.zIndex = "800"; // Below CRT overlay (999) so scanlines render on top
+    modal.style.zIndex = "1025"; // Above CRT overlay so text is crisp
     modal.style.maxWidth = "460px";
     modal.style.border = "1px solid var(--cyber-cyan)";
     modal.style.boxShadow = "0 0 25px rgba(0, 229, 255, 0.2)";
@@ -768,6 +828,11 @@ function injectUpgradeTriggerButton() {
 }
 
 function initView() {
+    musicAllowed = true;
+    musicStarted = false;
+    removeMenuMusicListeners();
+    addMenuMusicListeners();
+
     header.style.opacity = 0;
     header.style.pointerEvents = "none";
     loginPanel.style.display = "none";
@@ -877,6 +942,8 @@ btnMenuNew.addEventListener("click", () => {
 btnMenuContinue.addEventListener("click", () => {
     if (!state.codename) return;
 
+    stopMenuMusic();
+    synth.startAmbientDrone();
     synth.playSuccess();
     menuPanel.style.display = "none";
     trialPanel.style.display = "flex";
@@ -948,6 +1015,8 @@ btnMenuDiagnostics.addEventListener("click", () => {
 });
 
 btnMenuExit.addEventListener("click", () => {
+    stopMenuMusic();
+    synth.stopAmbientDrone();
     synth.playFail();
 
     menuPanel.style.display = "none";
@@ -1002,11 +1071,14 @@ function handleLogin() {
     const val = agentInput.value.trim();
     if (!val) return;
 
+    stopMenuMusic(); // Stop music immediately!
+
     synth.playSuccess();
     state.login(val);
 
     loginPanel.style.animation = "shakeWidget 0.4s";
     setTimeout(() => {
+        synth.startAmbientDrone();
         loginPanel.style.display = "none";
         trialPanel.style.display = "flex";
         header.style.opacity = 1;
@@ -1188,6 +1260,7 @@ btnHint.addEventListener("click", () => {
 
 btnReset.addEventListener("click", () => {
     if (confirm("PURGE CORE registers? All climbing statistics and current neural cleared.")) {
+        synth.stopAmbientDrone();
         synth.playFail();
         state.reset();
 

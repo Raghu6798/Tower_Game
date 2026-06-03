@@ -8,6 +8,7 @@
 		"zip": "npm run build && mkdir -p dist && zip -r dist/game.zip dist -x \"**/.DS_Store\""
 	},
 	"dependencies": {
+		"@neondatabase/serverless": "^1.1.0",
 		"kaplay": "^3001.0.19"
 	},
 	"devDependencies": {

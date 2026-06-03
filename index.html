@@ -121,7 +121,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            z-index: 10;
+            z-index: 1015;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -150,65 +150,81 @@
         }
 
         /* HEADER SECTION */
-        .hud-header {
+        .hud-header.glass-panel {
             width: 100%;
             display: grid;
             grid-template-columns: 1.5fr 2fr 1.5fr;
             align-items: center;
             gap: 15px;
+            background: rgba(10, 18, 22, 0.85); /* Cyan-tinted translucent glass */
+            border: 1.5px solid rgba(0, 229, 255, 0.4); /* Cyber cyan crisp border */
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.75), inset 0 0 20px rgba(0, 229, 255, 0.15);
+            padding: 16px 24px;
+            border-radius: 12px;
         }
 
         .header-title {
-            font-size: 16px;
+            font-size: 20px; /* Larger */
             font-weight: 900;
             letter-spacing: 1.5px;
-            color: var(--green-glow);
-            animation: pulseGlow 4s infinite;
+            color: #ffffff; /* Clean white */
             display: flex;
             align-items: center;
             gap: 8px;
+            text-shadow: 0 0 12px rgba(0, 229, 255, 0.5); /* Cyan glow instead of terminal green */
         }
 
         .header-stats {
             display: flex;
             justify-content: space-around;
             align-items: center;
-            font-family: var(--font-mono);
-            font-size: 24px;
-            letter-spacing: 1px;
+            font-family: var(--font-display); /* Clean sans-serif Oxanium font */
+            font-size: 28px; /* Larger font */
+            letter-spacing: 1.2px;
+            font-weight: 700;
         }
 
         .stat-badge {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
+        }
+
+        .stat-badge span:not(.badge-val) {
+            color: rgba(255, 255, 255, 0.65);
+            font-size: 22px; /* Larger labels */
+            font-weight: 500;
+            letter-spacing: 1px;
         }
 
         .badge-val {
             color: var(--cyber-cyan);
-            font-weight: bold;
+            font-weight: 900;
+            font-size: 28px; /* Larger values */
         }
 
         .header-xp-panel {
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            gap: 6px;
         }
 
         .xp-label-row {
             display: flex;
             justify-content: space-between;
-            font-size: 11px;
+            font-size: 14px; /* Larger */
             letter-spacing: 0.5px;
-            color: rgba(255, 255, 255, 0.7);
+            color: rgba(255, 255, 255, 0.85);
+            font-family: var(--font-display);
+            margin-bottom: 2px;
         }
 
         .xp-bar-container {
             width: 100%;
-            height: 12px;
+            height: 14px; /* Larger bar height */
             background: rgba(0, 0, 0, 0.6);
-            border: 1px solid rgba(0, 255, 102, 0.3);
-            border-radius: 6px;
+            border: 1px solid rgba(0, 229, 255, 0.35);
+            border-radius: 7px;
             overflow: hidden;
             position: relative;
         }
@@ -216,9 +232,9 @@
         .xp-progress-bar {
             width: 0%;
             height: 100%;
-            background: linear-gradient(90deg, var(--green-glow), var(--cyber-cyan));
-            box-shadow: 0 0 10px var(--green-glow);
-            border-radius: 6px;
+            background: linear-gradient(90deg, var(--cyber-cyan), #c837ff); /* Premium cyan to violet gradient */
+            box-shadow: 0 0 10px var(--cyber-cyan);
+            border-radius: 7px;
             transition: width 0.6s cubic-bezier(0.075, 0.82, 0.165, 1);
         }
 
@@ -425,7 +441,6 @@
             text-shadow: none;
         }
 
-        /* CONSOLE CHILLING TRIAL CONSOLE */
         .trial-container {
             width: 100%;
             max-width: 680px;
@@ -433,6 +448,8 @@
             flex-direction: column;
             gap: 15px;
             animation: slideInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+            margin-left: auto;
+            margin-right: 60px;
         }
 
         .dialog-board {
@@ -613,7 +630,7 @@
             transform: translate(-50%, -50%);
             width: 100%;
             max-width: 520px;
-            z-index: 600;
+            z-index: 1020;
             animation: zoomInReveal 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
@@ -811,7 +828,7 @@
 </head>
 <body style="overflow:hidden">
     <!-- Full-screen dynamic tower background during main menu/login lobby -->
-    <div id="menu-background" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1);">
+    <div id="menu-background" style="display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1);">
         <!-- Dark tint overlay so text is readable over the video -->
         <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(rgba(3, 8, 5, 0.55), rgba(3, 8, 5, 0.85)); z-index: 1;"></div>
         
@@ -846,9 +863,9 @@
                         <span>LEVEL:</span>
                         <span class="badge-val" id="stat-level">1</span>
                     </div>
-                    <div class="stat-badge" style="font-size: 18px; margin-left: 10px;">
+                    <div class="stat-badge">
                         <span>CLASS:</span>
-                        <span class="badge-val" id="stat-class" style="color: var(--spectral-violet); font-size: 16px;">Unregistered Aspirant</span>
+                        <span class="badge-val" id="stat-class" style="color: #e6a3ff;">Unregistered Aspirant</span>
                     </div>
                 </div>
             </div>
