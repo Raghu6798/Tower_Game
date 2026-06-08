@@ -4,6 +4,43 @@ const getApiKey = () => {
            (typeof process !== "undefined" && process.env ? process.env.GEMINI_API_KEY : "");
 };
 
+const getSambaNovaApiKey = () => {
+    return import.meta.env.VITE_SAMBANOVA_API_KEY || 
+           (typeof process !== "undefined" && process.env ? process.env.SAMBANOVA_API_KEY : "");
+};
+
+async function callSambaNovaAPI(prompt) {
+    const apiKey = getSambaNovaApiKey();
+    if (!apiKey) throw new Error("No SambaNova API key configured");
+
+    console.log(">> [API] Connecting to SambaNova API...");
+    const response = await fetch("https://api.sambanova.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model: "Meta-Llama-3.3-70B-Instruct",
+            messages: [
+                { role: "user", content: prompt }
+            ],
+            response_format: { type: "json_object" }
+        })
+    });
+
+    const data = await response.json();
+    if (data.error) {
+        throw new Error(data.error.message);
+    }
+    if (data.choices && data.choices.length > 0) {
+        const rawText = data.choices[0].message.content;
+        const cleanText = rawText.replace(/```json|```/g, "").trim();
+        return JSON.parse(cleanText);
+    }
+    throw new Error("No output content returned from SambaNova");
+}
+
 // Memory Management
 export async function fetchMemory() {
     try {
@@ -195,45 +232,53 @@ You MUST return a JSON object with this exact schema:
 Ensure the puzzle has a single, definitive, short English word or number code solution (UPPER CASE).
 Return ONLY the raw JSON block without markdown formatting or code blocks.`;
 
-    if (!apiKey) {
-        console.warn(`>> [API] No Gemini API key found. Using fallback procedural challenge.`);
-        return generateProceduralChallenge(floor);
-    }
+    if (apiKey) {
+        try {
+            console.log(`>> [API] Requesting Floor ${floor} challenge from Gemini API...`);
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: prompt
+                        }]
+                    }],
+                    generationConfig: {
+                        responseMimeType: "application/json"
+                    }
+                })
+            });
 
-    try {
-        console.log(`>> [API] Requesting Floor ${floor} challenge from Gemini API...`);
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{
-                    parts: [{
-                        text: prompt
-                    }]
-                }],
-                generationConfig: {
-                    responseMimeType: "application/json"
+            const data = await response.json();
+            if (data.error) throw new Error(data.error.message);
+
+            if (data.candidates && data.candidates.length > 0) {
+                const rawText = data.candidates[0].content.parts[0].text;
+                const cleanText = rawText.replace(/```json|```/g, "").trim();
+                const parsed = JSON.parse(cleanText);
+                
+                if (parsed.challenge && parsed.administrator_intro) {
+                    return parsed;
                 }
-            })
-        });
-
-        const data = await response.json();
-        if (data.error) throw new Error(data.error.message);
-
-        if (data.candidates && data.candidates.length > 0) {
-            const rawText = data.candidates[0].content.parts[0].text;
-            const cleanText = rawText.replace(/```json|```/g, "").trim();
-            const parsed = JSON.parse(cleanText);
-            
-            if (parsed.challenge && parsed.administrator_intro) {
-                return parsed;
             }
+            throw new Error("Malformed JSON schema returned");
+        } catch (e) {
+            console.warn(`>> [API] Gemini Challenge failed on Floor ${floor}: "${e.message}". Trying SambaNova.`);
         }
-        throw new Error("Malformed JSON schema returned");
-    } catch (e) {
-        console.warn(`>> [API] Challenge fallback on Floor ${floor}: "${e.message}". Loading procedural logic.`);
-        return generateProceduralChallenge(floor);
     }
+
+    const sambaNovaKey = getSambaNovaApiKey();
+    if (sambaNovaKey) {
+        try {
+            return await callSambaNovaAPI(prompt);
+        } catch (e) {
+            console.warn(`>> [API] SambaNova Challenge failed on Floor ${floor}: "${e.message}". Falling back to procedural logic.`);
+        }
+    }
+
+    console.warn(`>> [API] No AI providers succeeded/available. Using fallback procedural challenge.`);
+    return generateProceduralChallenge(floor);
 }
 
 export async function checkAnswer(floor, question, userAnswer) {
@@ -265,46 +310,59 @@ Return a JSON object matching this exact schema:
 }
 Return ONLY the raw JSON block without markdown formatting or code blocks.`;
 
-    if (!apiKey) {
-        console.warn(`>> [API] No Gemini API key found. Using local exact match judge.`);
-        return runLocalExactMatch(floor, question, userAnswer, procedural.solution);
+    if (apiKey) {
+        try {
+            console.log(`>> [API] Checking answer semantically via Gemini API...`);
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: prompt
+                        }]
+                    }],
+                    generationConfig: {
+                        responseMimeType: "application/json"
+                    }
+                })
+            });
+
+            const data = await response.json();
+            if (data.error) throw new Error(data.error.message);
+
+            if (data.candidates && data.candidates.length > 0) {
+                const rawText = data.candidates[0].content.parts[0].text;
+                const cleanText = rawText.replace(/```json|```/g, "").trim();
+                const parsed = JSON.parse(cleanText);
+                
+                // Save to memory asynchronously
+                saveMemory(floor, question, userAnswer, parsed.administrator_remarks);
+                
+                return parsed;
+            }
+            throw new Error("Malformed judge response");
+        } catch (e) {
+            console.warn(`>> [API] Gemini Semantic judge failed: "${e.message}". Trying SambaNova.`);
+        }
     }
 
-    try {
-        console.log(`>> [API] Checking answer semantically via Gemini API...`);
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{
-                    parts: [{
-                        text: prompt
-                    }]
-                }],
-                generationConfig: {
-                    responseMimeType: "application/json"
-                }
-            })
-        });
-
-        const data = await response.json();
-        if (data.error) throw new Error(data.error.message);
-
-        if (data.candidates && data.candidates.length > 0) {
-            const rawText = data.candidates[0].content.parts[0].text;
-            const cleanText = rawText.replace(/```json|```/g, "").trim();
-            const parsed = JSON.parse(cleanText);
+    const sambaNovaKey = getSambaNovaApiKey();
+    if (sambaNovaKey) {
+        try {
+            const parsed = await callSambaNovaAPI(prompt);
             
             // Save to memory asynchronously
             saveMemory(floor, question, userAnswer, parsed.administrator_remarks);
             
             return parsed;
+        } catch (e) {
+            console.warn(`>> [API] SambaNova Semantic judge failed: "${e.message}". Falling back to client exact match.`);
         }
-        throw new Error("Malformed judge response");
-    } catch (e) {
-        console.warn(`>> [API] Semantic judge fallback: "${e.message}". Running client exact match.`);
-        return runLocalExactMatch(floor, question, userAnswer, procedural.solution);
     }
+
+    console.warn(`>> [API] No AI providers succeeded/available for judge. Running client exact match.`);
+    return runLocalExactMatch(floor, question, userAnswer, procedural.solution);
 }
 
 function runLocalExactMatch(floor, question, userAnswer, targetSolution) {
@@ -346,41 +404,49 @@ Return a single JSON object with this schema:
 }
 Return ONLY the raw JSON block.`;
 
-    if (!apiKey) {
-        console.warn(`>> [API] No Gemini API key found. Using local promotion ceremony.`);
-        return runLocalPromotion();
-    }
+    if (apiKey) {
+        try {
+            console.log(`>> [API] Class Promotion Ceremony via Gemini API...`);
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: prompt
+                        }]
+                    }],
+                    generationConfig: {
+                        responseMimeType: "application/json"
+                    }
+                })
+            });
 
-    try {
-        console.log(`>> [API] Class Promotion Ceremony via Gemini API...`);
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{
-                    parts: [{
-                        text: prompt
-                    }]
-                }],
-                generationConfig: {
-                    responseMimeType: "application/json"
-                }
-            })
-        });
+            const data = await response.json();
+            if (data.error) throw new Error(data.error.message);
 
-        const data = await response.json();
-        if (data.error) throw new Error(data.error.message);
-
-        if (data.candidates && data.candidates.length > 0) {
-            const rawText = data.candidates[0].content.parts[0].text;
-            const cleanText = rawText.replace(/```json|```/g, "").trim();
-            return JSON.parse(cleanText);
+            if (data.candidates && data.candidates.length > 0) {
+                const rawText = data.candidates[0].content.parts[0].text;
+                const cleanText = rawText.replace(/```json|```/g, "").trim();
+                return JSON.parse(cleanText);
+            }
+            throw new Error("Invalid promotion ceremony");
+        } catch (e) {
+            console.warn(`>> [API] Gemini Class Ceremony failed: "${e.message}". Trying SambaNova.`);
         }
-        throw new Error("Invalid promotion ceremony");
-    } catch (e) {
-        console.warn(`>> [API] Class Ceremony fallback: "${e.message}".`);
-        return runLocalPromotion();
     }
+
+    const sambaNovaKey = getSambaNovaApiKey();
+    if (sambaNovaKey) {
+        try {
+            return await callSambaNovaAPI(prompt);
+        } catch (e) {
+            console.warn(`>> [API] SambaNova Class Ceremony failed: "${e.message}". Falling back to local promotion.`);
+        }
+    }
+
+    console.warn(`>> [API] No AI providers succeeded/available for ceremony. Using local promotion ceremony.`);
+    return runLocalPromotion();
 }
 
 function runLocalPromotion() {

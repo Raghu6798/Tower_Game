@@ -189,20 +189,18 @@ const k = kaplay({
     background: [10, 10, 12]
 });
 
-k.loadSound("main_menu_song", "examples/sounds/main_menu_song.mpeg");
-
 let menuMusic = null;
 let musicStarted = false;
 let musicAllowed = true;
 
 function addMenuMusicListeners() {
-    document.addEventListener("click", startMenuMusic);
-    document.addEventListener("keydown", startMenuMusic);
+    window.addEventListener("click", startMenuMusic, { capture: true });
+    window.addEventListener("keydown", startMenuMusic, { capture: true });
 }
 
 function removeMenuMusicListeners() {
-    document.removeEventListener("click", startMenuMusic);
-    document.removeEventListener("keydown", startMenuMusic);
+    window.removeEventListener("click", startMenuMusic, { capture: true });
+    window.removeEventListener("keydown", startMenuMusic, { capture: true });
 }
 
 function startMenuMusic() {
@@ -212,13 +210,21 @@ function startMenuMusic() {
     if (menuBg && menuBg.style.display !== "none") {
         try {
             synth.init();
-            menuMusic = k.play("main_menu_song", {
-                loop: true,
-                volume: 0.3
-            });
-            musicStarted = true;
+            if (!menuMusic) {
+                menuMusic = document.getElementById("menu-music");
+                if (menuMusic) {
+                    menuMusic.volume = 0.3;
+                }
+            }
+            if (menuMusic) {
+                menuMusic.play().then(() => {
+                    musicStarted = true;
+                }).catch(e => {
+                    console.warn("Failed to play menu music on user interaction:", e);
+                });
+            }
         } catch (e) {
-            console.warn("Failed to play menu music:", e);
+            console.warn("Failed to initiate menu music:", e);
         }
     }
 }
@@ -226,13 +232,16 @@ function startMenuMusic() {
 function stopMenuMusic() {
     musicAllowed = false;
     removeMenuMusicListeners();
+    if (!menuMusic) {
+        menuMusic = document.getElementById("menu-music");
+    }
     if (menuMusic) {
         try {
-            menuMusic.stop();
+            menuMusic.pause();
+            menuMusic.currentTime = 0;
         } catch (e) {
             console.warn("Failed to stop menu music:", e);
         }
-        menuMusic = null;
         musicStarted = false;
     }
 }
@@ -643,6 +652,7 @@ k.setCamPos(centerX, k.height() - 180);
 let currentChallengeData = null;
 
 const header = document.getElementById("main-header");
+const headerTitle = document.querySelector(".header-title");
 const menuPanel = document.getElementById("menu-panel");
 const loginPanel = document.getElementById("login-panel");
 const trialPanel = document.getElementById("trial-panel");
@@ -902,10 +912,26 @@ function typeDialogue(text, element = adminBubble) {
     type();
 }
 
+if (headerTitle) {
+    headerTitle.addEventListener("click", () => {
+        synth.playClick();
+        synth.stopAmbientDrone();
+        
+        const menuBg = document.getElementById("menu-background");
+        if (menuBg) {
+            menuBg.style.display = "block";
+            setTimeout(() => { menuBg.style.opacity = 1; }, 50);
+        }
+
+        initView();
+    });
+}
+
 // ==========================================
 // 5. MAIN MENU FLOW HANDLERS
 // ==========================================
 btnMenuNew.addEventListener("click", () => {
+    startMenuMusic();
     synth.playClick();
     state.reset();
     menuPanel.style.display = "none";
@@ -969,6 +995,7 @@ btnMenuContinue.addEventListener("click", () => {
 });
 
 btnMenuLeaderboard.addEventListener("click", () => {
+    startMenuMusic();
     synth.playClick();
 
     const mpModal = document.getElementById("mp-modal");
@@ -1010,6 +1037,7 @@ btnMenuLeaderboard.addEventListener("click", () => {
 });
 
 btnMenuDiagnostics.addEventListener("click", () => {
+    startMenuMusic();
     synth.playClick();
     diagnosticsModal.style.display = "block";
 });

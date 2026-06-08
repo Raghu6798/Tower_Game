@@ -38,7 +38,7 @@
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🏰 THE ADMINISTRATOR'S TOWER</title>
+    <title>Tower of Anomalies</title>
     <!-- State-of-the-Art Futuristic & Monospace Cyber Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -114,6 +114,12 @@
             100% { text-shadow: 0 0 5px var(--green-glow); }
         }
 
+        @keyframes pulseCyanViolet {
+            0% { text-shadow: 0 0 5px var(--cyber-cyan); }
+            50% { text-shadow: 0 0 20px var(--cyber-cyan), 0 0 30px #c837ff; }
+            100% { text-shadow: 0 0 5px var(--cyber-cyan); }
+        }
+
         /* GLASSMORPHIC DYNAMIC INTERFACE */
         .hud-overlay {
             position: absolute;
@@ -172,6 +178,18 @@
             align-items: center;
             gap: 8px;
             text-shadow: 0 0 12px rgba(0, 229, 255, 0.5); /* Cyan glow instead of terminal green */
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .header-title:hover {
+            opacity: 0.85;
+            transform: scale(1.03);
+            text-shadow: 0 0 18px rgba(0, 229, 255, 0.8);
+        }
+
+        .header-title:active {
+            transform: scale(0.97);
         }
 
         .header-stats {
@@ -284,7 +302,7 @@
         .btn-menu-opt {
             background: transparent;
             border: none;
-            border-left: 3px solid rgba(0, 255, 102, 0.4);
+            border-left: 3px solid rgba(0, 229, 255, 0.4);
             border-radius: 0;
             color: rgba(255, 255, 255, 0.85);
             font-family: var(--font-display);
@@ -306,7 +324,7 @@
             content: '▶';
             position: absolute;
             left: -30px;
-            color: var(--green-glow);
+            color: var(--cyber-cyan);
             transition: left 0.3s cubic-bezier(0.19, 1, 0.22, 1);
             font-weight: 900;
             font-size: 14px;
@@ -316,10 +334,10 @@
 
         .btn-menu-opt:hover:not(:disabled) {
             background: transparent;
-            border-left-color: var(--green-glow);
+            border-left-color: var(--cyber-cyan);
             padding-left: 40px;
             color: #ffffff;
-            text-shadow: 0 0 20px rgba(0, 255, 102, 0.8), 0 0 40px rgba(0, 255, 102, 0.4);
+            text-shadow: 0 0 20px rgba(0, 229, 255, 0.8), 0 0 40px rgba(200, 55, 255, 0.5);
         }
 
         .btn-menu-opt:hover:not(:disabled)::before {
@@ -349,19 +367,19 @@
             font-size: 20px;
             font-weight: 900;
             letter-spacing: 2px;
-            color: var(--green-glow);
+            color: var(--cyber-cyan);
             margin-bottom: 20px;
-            text-shadow: 0 0 10px rgba(0, 255, 102, 0.3);
+            text-shadow: 0 0 10px rgba(0, 229, 255, 0.3);
         }
 
         .gate-boot-sequence {
             height: 140px;
             background: rgba(0, 0, 0, 0.6);
-            border: 1px solid rgba(0, 255, 102, 0.2);
+            border: 1px solid rgba(0, 229, 255, 0.3);
             border-radius: 4px;
             font-family: var(--font-mono);
             font-size: 16px;
-            color: #a8ffa8;
+            color: var(--cyber-cyan);
             padding: 10px;
             text-align: left;
             overflow-y: auto;
@@ -402,15 +420,15 @@
         }
 
         input[type="text"]:focus {
-            border-color: var(--green-glow);
-            box-shadow: 0 0 10px rgba(0, 255, 102, 0.2), inset 0 0 5px rgba(0, 0, 0, 0.9);
+            border-color: var(--cyber-cyan);
+            box-shadow: 0 0 10px rgba(0, 229, 255, 0.35), inset 0 0 5px rgba(0, 0, 0, 0.9);
         }
 
         .btn-primary {
-            background: rgba(0, 255, 102, 0.1);
-            border: 1px solid var(--green-glow);
+            background: rgba(0, 229, 255, 0.15);
+            border: 1.5px solid var(--cyber-cyan);
             border-radius: 4px;
-            color: var(--green-glow);
+            color: var(--cyber-cyan);
             font-family: var(--font-display);
             font-weight: 700;
             padding: 12px 24px;
@@ -418,14 +436,14 @@
             cursor: pointer;
             letter-spacing: 1px;
             transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
-            text-shadow: 0 0 5px rgba(0, 255, 102, 0.4);
-            box-shadow: 0 0 5px rgba(0, 255, 102, 0.05);
+            text-shadow: 0 0 5px rgba(0, 229, 255, 0.4);
+            box-shadow: 0 0 5px rgba(0, 229, 255, 0.05);
         }
 
         .btn-primary:hover:not(:disabled) {
-            background: var(--green-glow);
-            color: var(--bg-obsidian);
-            box-shadow: 0 0 15px var(--green-glow);
+            background: var(--cyber-cyan);
+            color: #000000;
+            box-shadow: 0 0 15px var(--cyber-cyan);
             text-shadow: none;
         }
 
@@ -838,6 +856,9 @@
         </video>
     </div>
 
+    <!-- Audio element for main menu background music -->
+    <audio id="menu-music" src="/examples/sounds/main_menu_song.mpeg" preload="auto" loop></audio>
+
     <!-- Visual background game stream (KAPLAY Canvas) -->
     <canvas id="kaplay-canvas"></canvas>
 
@@ -888,7 +909,7 @@
             
             <!-- PANEL 0: NEW MAIN MENU PANEL -->
             <div class="main-menu-box" id="menu-panel">
-                <div class="glow-title" style="font-size: 38px; letter-spacing: 6px; margin-bottom: 6px; animation: pulseGlow 3s infinite;">TOWER OF ANOMALIES</div>
+                <div class="glow-title" style="font-size: 38px; letter-spacing: 6px; margin-bottom: 6px; animation: pulseCyanViolet 3s infinite; color: #ffffff;">TOWER OF ANOMALIES</div>
                 <div class="menu-subtitle" style="margin-bottom: 40px;"> ▸ </div>
 
                 <div class="menu-options">
@@ -953,11 +974,10 @@
         <!-- BOTTOM HUD FOOTER BRAND -->
         <footer class="hud-footer">
             <div class="footer-left">
-                <span>CORE VERSION: v3.5 // DYNAMIC DUAL COGNITION SECURED</span>
-                <span class="btn-text" id="btn-show-scores">💾 HIGH SCORES</span>
+            
             </div>
             <div>
-                <span>STATUS: <span style="color: var(--green-glow); font-weight: bold;">CONNECTED</span></span>
+               
             </div>
         </footer>
     </div>
