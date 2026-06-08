@@ -655,6 +655,7 @@ k.setCamPos(centerX, k.height() - 180);
 // 4. INTERACTIVE HUD COORDINATOR
 // ==========================================
 let currentChallengeData = null;
+let wrongAttempts = 0;
 
 const header = document.getElementById("main-header");
 const headerTitle = document.querySelector(".header-title");
@@ -1144,6 +1145,7 @@ function handleLogin() {
 // 7. CHALLENGE UPLINK ROUTINE
 // ==========================================
 async function triggerChallengeGeneration() {
+    wrongAttempts = 0;
     // Reset administrator avatar to neutral
     const adminFace = document.getElementById("admin-face");
     if (adminFace) adminFace.style.backgroundImage = "url('/sprites/admin_neutral.png')";
@@ -1231,7 +1233,13 @@ async function handleAnswerSubmit() {
         setTimeout(() => answerInput.classList.remove("shake"), 500);
 
         state.recordAnswer(state.floor, currentChallengeData.challenge, val, false);
-        typeDialogue(result.administrator_remarks);
+        
+        wrongAttempts += 1;
+        if (wrongAttempts >= 3) {
+            typeDialogue(result.administrator_remarks + " [CORRECT ANSWER: " + result.solution + "]");
+        } else {
+            typeDialogue(result.administrator_remarks + " [Attempts failed: " + wrongAttempts + "/3]");
+        }
 
         submitBtn.disabled = false;
         answerInput.disabled = false;

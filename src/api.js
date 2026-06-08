@@ -1,4 +1,4 @@
-// Dynamic AI Uplink gateway calling gemini-3.5-flash
+// Dynamic AI Uplink gateway calling Gemini, SambaNova, Groq, and Cerebras
 const getApiKey = () => {
     return import.meta.env.VITE_GEMINI_API_KEY || 
            (typeof process !== "undefined" && process.env ? process.env.GEMINI_API_KEY : "");
@@ -9,6 +9,17 @@ const getSambaNovaApiKey = () => {
            (typeof process !== "undefined" && process.env ? process.env.SAMBANOVA_API_KEY : "");
 };
 
+const getGroqApiKey = () => {
+    return import.meta.env.VITE_GROQ_API_KEY || 
+           (typeof process !== "undefined" && process.env ? process.env.GROQ_API_KEY : "");
+};
+
+const getCerebrasApiKey = () => {
+    return import.meta.env.VITE_CEREBRAS_API_KEY || 
+           (typeof process !== "undefined" && process.env ? process.env.CEREBRAS_API_KEY : "");
+};
+
+// SambaNova Client Helper
 async function callSambaNovaAPI(prompt) {
     const apiKey = getSambaNovaApiKey();
     if (!apiKey) throw new Error("No SambaNova API key configured");
@@ -21,24 +32,93 @@ async function callSambaNovaAPI(prompt) {
             "Authorization": `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-            model: "Llama-4-Maverick-17B-128E-Instruct",
-            messages: [
-                { role: "user", content: prompt }
-            ],
+            model: "Meta-Llama-3.3-70B-Instruct",
+            messages: [{ role: "user", content: prompt }],
             response_format: { type: "json_object" }
         })
     });
 
-    const data = await response.json();
-    if (data.error) {
-        throw new Error(data.error.message);
+    if (!response.ok) {
+        throw new Error(`SambaNova HTTP error! Status: ${response.status}`);
     }
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+
     if (data.choices && data.choices.length > 0) {
         const rawText = data.choices[0].message.content;
         const cleanText = rawText.replace(/```json|```/g, "").trim();
         return JSON.parse(cleanText);
     }
-    throw new Error("No output content returned from SambaNova");
+    throw new Error("No content returned from SambaNova");
+}
+
+// Groq Client Helper
+async function callGroqAPI(prompt) {
+    const apiKey = getGroqApiKey();
+    if (!apiKey) throw new Error("No Groq API key configured");
+
+    console.log(">> [API] Connecting to Groq API...");
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model: "openai/gpt-oss-120b",
+            messages: [{ role: "user", content: prompt }],
+            response_format: { type: "json_object" }
+        })
+    });
+
+    if (!response.ok) {
+        throw new Error(`Groq HTTP error! Status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+
+    if (data.choices && data.choices.length > 0) {
+        const rawText = data.choices[0].message.content;
+        const cleanText = rawText.replace(/```json|```/g, "").trim();
+        return JSON.parse(cleanText);
+    }
+    throw new Error("No content returned from Groq");
+}
+
+// Cerebras Client Helper
+async function callCerebrasAPI(prompt) {
+    const apiKey = getCerebrasApiKey();
+    if (!apiKey) throw new Error("No Cerebras API key configured");
+
+    console.log(">> [API] Connecting to Cerebras API...");
+    const response = await fetch("https://api.cerebras.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model: "gpt-oss-120b",
+            messages: [{ role: "user", content: prompt }],
+            response_format: { type: "json_object" }
+        })
+    });
+
+    if (!response.ok) {
+        throw new Error(`Cerebras HTTP error! Status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+
+    if (data.choices && data.choices.length > 0) {
+        const rawText = data.choices[0].message.content;
+        const cleanText = rawText.replace(/```json|```/g, "").trim();
+        return JSON.parse(cleanText);
+    }
+    throw new Error("No content returned from Cerebras");
 }
 
 // Memory Management
@@ -52,8 +132,7 @@ export async function fetchMemory() {
         if (!contentType || !contentType.includes("application/json")) {
             throw new Error("Response is not JSON");
         }
-        const data = await response.json();
-        return data;
+        return await response.json();
     } catch (e) {
         console.warn(">> [API] Memory server offline, loading from localStorage:", e.message);
         try {
@@ -80,12 +159,10 @@ export async function saveMemory(floor, challenge, player_answer, admin_remark) 
         console.warn(">> [API] Memory server save failed, saving to localStorage:", e.message);
     }
 
-    // Always save to localStorage as well, so local client state is persistent and works seamlessly on static hosts like Vercel
     try {
         const localData = localStorage.getItem("admin_memory_history");
         const history = localData ? JSON.parse(localData) : [];
         history.push({ floor, challenge, player_answer, admin_remark });
-        // Keep only last 5 to match server limit
         if (history.length > 5) {
             history.shift();
         }
@@ -133,7 +210,6 @@ function generateProceduralChallenge(floor) {
     
     switch (type) {
         case 0: {
-            // Arithmetic Sequence Challenge
             const start = (seed % 10) + 2;
             const diff = (seed % 6) + 3;
             const step1 = start + diff;
@@ -148,7 +224,6 @@ function generateProceduralChallenge(floor) {
             };
         }
         case 1: {
-            // Hexadecimal Cipher Challenge
             const words = ["BYTE", "CORE", "GATE", "LINK", "NODE", "GRID", "FLOW", "VOID"];
             const chosen = words[seed % words.length];
             const hexRep = Array.from(chosen).map(char => char.charCodeAt(0).toString(16)).join(" ");
@@ -160,7 +235,6 @@ function generateProceduralChallenge(floor) {
             };
         }
         case 2: {
-            // Boolean Logic Challenge
             const p = (seed % 2) === 0;
             const q = (seed % 3) !== 0;
             const operator = (seed % 4 > 1) ? "AND" : "OR";
@@ -174,7 +248,6 @@ function generateProceduralChallenge(floor) {
             };
         }
         case 3: {
-            // String Reversal / Cipher Shift
             const words = ["SYNAPSE", "QUANTUM", "CYPHER", "RECURSION", "PROTOCOL"];
             const word = words[seed % words.length];
             const reversed = word.split("").reverse().join("");
@@ -201,7 +274,6 @@ function generateProceduralChallenge(floor) {
 export async function generateChallenge(floor, className) {
     const zone = getZoneInfo(floor);
     const memory = await fetchMemory();
-    const apiKey = getApiKey();
     
     let memoryContext = "";
     if (memory && memory.length > 0) {
@@ -232,23 +304,21 @@ You MUST return a JSON object with this exact schema:
 Ensure the puzzle has a single, definitive, short English word or number code solution (UPPER CASE).
 Return ONLY the raw JSON block without markdown formatting or code blocks.`;
 
-    if (apiKey) {
+    // 1. Try Gemini
+    const geminiApiKey = getApiKey();
+    if (geminiApiKey) {
         try {
             console.log(`>> [API] Requesting Floor ${floor} challenge from Gemini API...`);
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    contents: [{
-                        parts: [{
-                            text: prompt
-                        }]
-                    }],
-                    generationConfig: {
-                        responseMimeType: "application/json"
-                    }
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { responseMimeType: "application/json" }
                 })
             });
+
+            if (!response.ok) throw new Error(`Gemini status code: ${response.status}`);
 
             const data = await response.json();
             if (data.error) throw new Error(data.error.message);
@@ -257,7 +327,6 @@ Return ONLY the raw JSON block without markdown formatting or code blocks.`;
                 const rawText = data.candidates[0].content.parts[0].text;
                 const cleanText = rawText.replace(/```json|```/g, "").trim();
                 const parsed = JSON.parse(cleanText);
-                
                 if (parsed.challenge && parsed.administrator_intro) {
                     return parsed;
                 }
@@ -268,15 +337,37 @@ Return ONLY the raw JSON block without markdown formatting or code blocks.`;
         }
     }
 
+    // 2. Try SambaNova
     const sambaNovaKey = getSambaNovaApiKey();
     if (sambaNovaKey) {
         try {
             return await callSambaNovaAPI(prompt);
         } catch (e) {
-            console.warn(`>> [API] SambaNova Challenge failed on Floor ${floor}: "${e.message}". Falling back to procedural logic.`);
+            console.warn(`>> [API] SambaNova Challenge failed on Floor ${floor}: "${e.message}". Trying Groq.`);
         }
     }
 
+    // 3. Try Groq
+    const groqKey = getGroqApiKey();
+    if (groqKey) {
+        try {
+            return await callGroqAPI(prompt);
+        } catch (e) {
+            console.warn(`>> [API] Groq Challenge failed on Floor ${floor}: "${e.message}". Trying Cerebras.`);
+        }
+    }
+
+    // 4. Try Cerebras
+    const cerebrasKey = getCerebrasApiKey();
+    if (cerebrasKey) {
+        try {
+            return await callCerebrasAPI(prompt);
+        } catch (e) {
+            console.warn(`>> [API] Cerebras Challenge failed on Floor ${floor}: "${e.message}". Falling back to procedural.`);
+        }
+    }
+
+    // 5. Procedural Fallback
     console.warn(`>> [API] No AI providers succeeded/available. Using fallback procedural challenge.`);
     return generateProceduralChallenge(floor);
 }
@@ -284,7 +375,6 @@ Return ONLY the raw JSON block without markdown formatting or code blocks.`;
 export async function checkAnswer(floor, question, userAnswer) {
     const procedural = generateProceduralChallenge(floor);
     const memory = await fetchMemory();
-    const apiKey = getApiKey();
     
     let memoryContext = "";
     if (memory && memory.length > 0) {
@@ -310,23 +400,21 @@ Return a JSON object matching this exact schema:
 }
 Return ONLY the raw JSON block without markdown formatting or code blocks.`;
 
-    if (apiKey) {
+    // 1. Try Gemini
+    const geminiApiKey = getApiKey();
+    if (geminiApiKey) {
         try {
             console.log(`>> [API] Checking answer semantically via Gemini API...`);
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    contents: [{
-                        parts: [{
-                            text: prompt
-                        }]
-                    }],
-                    generationConfig: {
-                        responseMimeType: "application/json"
-                    }
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { responseMimeType: "application/json" }
                 })
             });
+
+            if (!response.ok) throw new Error(`Gemini status code: ${response.status}`);
 
             const data = await response.json();
             if (data.error) throw new Error(data.error.message);
@@ -336,9 +424,7 @@ Return ONLY the raw JSON block without markdown formatting or code blocks.`;
                 const cleanText = rawText.replace(/```json|```/g, "").trim();
                 const parsed = JSON.parse(cleanText);
                 
-                // Save to memory asynchronously
                 saveMemory(floor, question, userAnswer, parsed.administrator_remarks);
-                
                 return parsed;
             }
             throw new Error("Malformed judge response");
@@ -347,20 +433,43 @@ Return ONLY the raw JSON block without markdown formatting or code blocks.`;
         }
     }
 
+    // 2. Try SambaNova
     const sambaNovaKey = getSambaNovaApiKey();
     if (sambaNovaKey) {
         try {
             const parsed = await callSambaNovaAPI(prompt);
-            
-            // Save to memory asynchronously
             saveMemory(floor, question, userAnswer, parsed.administrator_remarks);
-            
             return parsed;
         } catch (e) {
-            console.warn(`>> [API] SambaNova Semantic judge failed: "${e.message}". Falling back to client exact match.`);
+            console.warn(`>> [API] SambaNova Semantic judge failed: "${e.message}". Trying Groq.`);
         }
     }
 
+    // 3. Try Groq
+    const groqKey = getGroqApiKey();
+    if (groqKey) {
+        try {
+            const parsed = await callGroqAPI(prompt);
+            saveMemory(floor, question, userAnswer, parsed.administrator_remarks);
+            return parsed;
+        } catch (e) {
+            console.warn(`>> [API] Groq Semantic judge failed: "${e.message}". Trying Cerebras.`);
+        }
+    }
+
+    // 4. Try Cerebras
+    const cerebrasKey = getCerebrasApiKey();
+    if (cerebrasKey) {
+        try {
+            const parsed = await callCerebrasAPI(prompt);
+            saveMemory(floor, question, userAnswer, parsed.administrator_remarks);
+            return parsed;
+        } catch (e) {
+            console.warn(`>> [API] Cerebras Semantic judge failed: "${e.message}". Falling back to client exact match.`);
+        }
+    }
+
+    // 5. Procedural Fallback
     console.warn(`>> [API] No AI providers succeeded/available for judge. Running client exact match.`);
     return runLocalExactMatch(floor, question, userAnswer, procedural.solution);
 }
@@ -375,7 +484,6 @@ function runLocalExactMatch(floor, question, userAnswer, targetSolution) {
         ? "Hmph. Match detected in local system buffers. Don't let success blind you, Aspirant."
         : "Match rejected. Your input sequence is mathematically deficient.";
         
-    // Save to memory asynchronously
     saveMemory(floor, question, userAnswer, fallbackRemark);
     
     return {
@@ -386,7 +494,6 @@ function runLocalExactMatch(floor, question, userAnswer, targetSolution) {
 }
 
 export async function determineSpecializedClass(history) {
-    const apiKey = getApiKey();
     const prompt = `You are conducting a "Class Promotion Ceremony" for a 100-floor tower game.
 Analyze the player's chronological puzzle response logs:
 ${JSON.stringify(history)}
@@ -404,23 +511,21 @@ Return a single JSON object with this schema:
 }
 Return ONLY the raw JSON block.`;
 
-    if (apiKey) {
+    // 1. Try Gemini
+    const geminiApiKey = getApiKey();
+    if (geminiApiKey) {
         try {
             console.log(`>> [API] Class Promotion Ceremony via Gemini API...`);
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    contents: [{
-                        parts: [{
-                            text: prompt
-                        }]
-                    }],
-                    generationConfig: {
-                        responseMimeType: "application/json"
-                    }
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { responseMimeType: "application/json" }
                 })
             });
+
+            if (!response.ok) throw new Error(`Gemini status code: ${response.status}`);
 
             const data = await response.json();
             if (data.error) throw new Error(data.error.message);
@@ -430,21 +535,43 @@ Return ONLY the raw JSON block.`;
                 const cleanText = rawText.replace(/```json|```/g, "").trim();
                 return JSON.parse(cleanText);
             }
-            throw new Error("Invalid promotion ceremony");
+            throw new Error("Invalid promotion ceremony response");
         } catch (e) {
             console.warn(`>> [API] Gemini Class Ceremony failed: "${e.message}". Trying SambaNova.`);
         }
     }
 
+    // 2. Try SambaNova
     const sambaNovaKey = getSambaNovaApiKey();
     if (sambaNovaKey) {
         try {
             return await callSambaNovaAPI(prompt);
         } catch (e) {
-            console.warn(`>> [API] SambaNova Class Ceremony failed: "${e.message}". Falling back to local promotion.`);
+            console.warn(`>> [API] SambaNova Class Ceremony failed: "${e.message}". Trying Groq.`);
         }
     }
 
+    // 3. Try Groq
+    const groqKey = getGroqApiKey();
+    if (groqKey) {
+        try {
+            return await callGroqAPI(prompt);
+        } catch (e) {
+            console.warn(`>> [API] Groq Class Ceremony failed: "${e.message}". Trying Cerebras.`);
+        }
+    }
+
+    // 4. Try Cerebras
+    const cerebrasKey = getCerebrasApiKey();
+    if (cerebrasKey) {
+        try {
+            return await callCerebrasAPI(prompt);
+        } catch (e) {
+            console.warn(`>> [API] Cerebras Class Ceremony failed: "${e.message}". Falling back to local promotion.`);
+        }
+    }
+
+    // 5. Procedural Fallback
     console.warn(`>> [API] No AI providers succeeded/available for ceremony. Using local promotion ceremony.`);
     return runLocalPromotion();
 }
