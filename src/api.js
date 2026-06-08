@@ -21,7 +21,7 @@ async function callSambaNovaAPI(prompt) {
             "Authorization": `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-            model: "Meta-Llama-3.3-70B-Instruct",
+            model: "Llama-4-Maverick-17B-128E-Instruct",
             messages: [
                 { role: "user", content: prompt }
             ],
