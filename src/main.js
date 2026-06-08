@@ -196,11 +196,17 @@ let musicAllowed = true;
 function addMenuMusicListeners() {
     window.addEventListener("click", startMenuMusic, { capture: true });
     window.addEventListener("keydown", startMenuMusic, { capture: true });
+    window.addEventListener("pointerdown", startMenuMusic, { capture: true });
+    window.addEventListener("touchstart", startMenuMusic, { capture: true });
+    window.addEventListener("mousedown", startMenuMusic, { capture: true });
 }
 
 function removeMenuMusicListeners() {
     window.removeEventListener("click", startMenuMusic, { capture: true });
     window.removeEventListener("keydown", startMenuMusic, { capture: true });
+    window.removeEventListener("pointerdown", startMenuMusic, { capture: true });
+    window.removeEventListener("touchstart", startMenuMusic, { capture: true });
+    window.removeEventListener("mousedown", startMenuMusic, { capture: true });
 }
 
 function startMenuMusic() {
@@ -219,8 +225,9 @@ function startMenuMusic() {
             if (menuMusic) {
                 menuMusic.play().then(() => {
                     musicStarted = true;
+                    removeMenuMusicListeners(); // Clean up listeners once successfully started
                 }).catch(e => {
-                    console.warn("Failed to play menu music on user interaction:", e);
+                    console.warn("Autoplay blocked or failed to play menu music, waiting for interaction:", e);
                 });
             }
         } catch (e) {
@@ -245,8 +252,6 @@ function stopMenuMusic() {
         musicStarted = false;
     }
 }
-
-
 
 // Setup scaling variables
 const floorHeight = 180;
@@ -866,6 +871,9 @@ function initView() {
         btnMenuContinue.disabled = true;
         btnMenuContinue.innerText = "📂 RESUME";
     }
+
+    // Try playing the main menu theme audio immediately on game load
+    startMenuMusic();
 }
 
 function syncHUD() {
@@ -1099,7 +1107,7 @@ function handleLogin() {
     const val = agentInput.value.trim();
     if (!val) return;
 
-    stopMenuMusic(); // Stop music immediately!
+    stopMenuMusic(); // Stop menu music on transition
 
     synth.playSuccess();
     state.login(val);
