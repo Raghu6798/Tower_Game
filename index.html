@@ -470,6 +470,10 @@
             margin-right: 60px;
         }
 
+        #trial-panel:has(~ #promotion-screen:not([style*="display: none"])) {
+            margin-right: 0;
+        }
+
         .dialog-board {
             display: grid;
             grid-template-columns: 125px 1fr;
@@ -575,27 +579,18 @@
         }
 
         /* CLASS PROMOTION CEREMONY PANEL (Overlay modal) */
-        .promotion-curtain {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(3, 8, 5, 0.95);
-            z-index: 500;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-            transition: opacity 0.5s;
-        }
-
         .promotion-modal {
-            max-width: 580px;
+            width: 100%;
+            max-width: 520px;
+            margin-left: 20px;
+            margin-right: 60px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
             text-align: center;
             border-color: var(--spectral-violet);
             box-shadow: 0 0 30px rgba(189, 0, 255, 0.2);
-            animation: zoomInReveal 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            animation: slideInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         .promotion-modal h2 {
@@ -730,14 +725,7 @@
             to { transform: scale(1) translate(-50%, -50%); opacity: 1; }
         }
         
-        /* Modal centering override for zoomInReveal */
-        .promotion-modal {
-            animation: zoomInSimple 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        @keyframes zoomInSimple {
-            from { transform: scale(0.9); opacity: 0; }
-            to { transform: scale(1); opacity: 1; }
-        }
+        /* Modal animation using standard slideInUp */
 
         @keyframes breatheBg {
             0% { transform: scale(1); filter: brightness(1); }
@@ -969,6 +957,19 @@
                 </div>
             </div>
 
+            <!-- PANEL 3: CLASS PROMOTION CEREMONY PANEL (Side-by-side) -->
+            <div class="glass-panel promotion-modal" id="promotion-screen" style="display: none;">
+                <h2>🏆 NEURAL TRANSFORMATION PROTOCOL</h2>
+                <p style="font-size: 13px; color: rgba(255, 255, 255, 0.6); margin-bottom: 20px; letter-spacing: 1px;">
+                    THE ADMINISTRATOR RE-MAPPED YOUR MENTAL CHANNELS
+                </p>
+                <div class="class-badge-big" id="ceremony-class-title">AETHER HACKER</div>
+                <div class="promotion-speech" id="ceremony-class-speech">
+                    "You have breached my encryption matrix with elegant wit. A mere Sentinel would have brute-forced the registers. I promote you to Aether Hacker."
+                </div>
+                <button class="btn-primary" id="btn-ceremony-ack" style="padding: 15px 40px; font-size: 16px;">ASCEND FURTHER</button>
+            </div>
+
         </main>
 
         <!-- BOTTOM HUD FOOTER BRAND -->
@@ -980,21 +981,6 @@
                
             </div>
         </footer>
-    </div>
-
-    <!-- CLASS PROMOTION CEREMONY OVERLAY -->
-    <div class="promotion-curtain" id="promotion-screen" style="display: none; opacity: 0;">
-        <div class="glass-panel promotion-modal">
-            <h2>🏆 NEURAL TRANSFORMATION PROTOCOL</h2>
-            <p style="font-size: 13px; color: rgba(255, 255, 255, 0.6); margin-bottom: 20px; letter-spacing: 1px;">
-                THE ADMINISTRATOR RE-MAPPED YOUR MENTAL CHANNELS
-            </p>
-            <div class="class-badge-big" id="ceremony-class-title">AETHER HACKER</div>
-            <div class="promotion-speech" id="ceremony-class-speech">
-                "You have breached my encryption matrix with elegant wit. A mere Sentinel would have brute-forced the registers. I promote you to Aether Hacker."
-            </div>
-            <button class="btn-primary" id="btn-ceremony-ack" style="padding: 15px 40px; font-size: 16px;">ASCEND FURTHER</button>
-        </div>
     </div>
 
     <!-- LEADERBOARD DATA MODAL -->
